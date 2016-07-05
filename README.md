@@ -1,2 +1,2 @@
 # luminaController
-A simple light controller using PWM (and soft PWM)
+A simple light controller for ArduinoMega using PWM (and soft PWM)
