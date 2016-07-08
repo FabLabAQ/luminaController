@@ -1,8 +1,15 @@
-#define _USE_SOFT_PWM_
-
 #include <SoftTimer.h>
 #include <SoftPwmTask.h>
 #include <DelayRun.h>
+#include <BlinkTask.h>
+
+//#define _USE_SOFT_PWM_
+
+#define SENSORE_A1 18
+#define SENSORE_A2 19
+#define SENSORE_B  20
+#define SENSORE_C  21
+
 
 SoftPwmTask led2(50);
 SoftPwmTask led4(51);
@@ -78,7 +85,7 @@ switch (pin) {
 
 }
 
-#define NUMERO_PROIETTORI 1
+#define NUMERO_PROIETTORI 8
 #define MIN_PWM 1   // LIVELLO MINIMO DI LUMINOSITÀ
 #define MAX_PWM 255 // LIVELLO MASSIMO DI LUMINOSITÀ
 #define DOWN_SLOPE -1
@@ -132,36 +139,58 @@ void lampadine_rough(Task* me) {
 }
 Task tskLampadine_rough(80, lampadine_rough);
 
+
+////// CONTROLLO MUSIC PLAYER //////
+// This task "press" play button of a MP3 player using a 
+// digital output connected to play/pause button of the player.
+// It press play only after the music duration time. 
+#define PLAY_BUTTON_PIN 24
+#define MUSIC_DURATION  29 // in seconds
+// -- On for 300ms off for 200ms, repeat it 1 times, sleep for MUSIC_DURATION seconds.
+BlinkTask tskMusicPlayer(PLAY_BUTTON_PIN, 300, 200, 1, MUSIC_DURATION*1000);
+
+////// TASK PER IL RITORNO A TEMPO ALLO SCENARIO 1 //////
 boolean scenario1(Task* task){ scenario = 1; };
-DelayRun tskScenario1(5000, scenario1);
+DelayRun tskScenario1(0, scenario1);
 
 
 ////// MAIN CONTROLLER //////
 
 void mainController(Task* me) {
   switch (scenario) {
+    case 0:
+      break;
     case 1:                                    // SCENARIO 1
       SoftTimer.remove(&tskProiettori_smooth); // Ferma effetto "smooth" su proiettori
       lampadine(0);                            // Lampadine OFF
-      proiettori(128);                         // Proiettori 50% 
+      proiettori(128);                         // Proiettori 50%
+      enableSensors();                         // Abilita i sensori di cambio scenario
+      tskMusicPlayer.stop();                   // Stop music loop
+      scenario = 0;                            // Nessuna azione del controller
       break;
     case 2:                                    // SCENARIO 2
+      disableSensors();                        // Disabilita i sensori di cambio scenario
+      tskMusicPlayer.start();                  // Start music loop
       SoftTimer.add(&tskProiettori_smooth);    // Avvia effetto "smooth" su proiettori
       lampadine(0);                            // Lampadine OFF
-      tskScenario1.delayMs = 5000;             // Durata scenario 2 in millisecondi
+      tskScenario1.delayMs = 30000;            // Durata scenario 2 in millisecondi
       tskScenario1.startDelayed();
       break;
     case 3:                                    // SCENARIO 3
+      disableSensors();                        // Disabilita i sensori di cambio scenario
+      tskMusicPlayer.stop();                   // Stop music loop
       SoftTimer.add(&tskProiettori_smooth);    // Avvia effetto "smooth" su proiettori
       lampadine(50);                           // Lampadine 20%
       tskScenario1.delayMs = 5000;             // Durata scenario 3 in millisecondi
       tskScenario1.startDelayed();
       break;
     case 4:                                    // SCENARIO 4
+      disableSensors();                        // Disabilita i sensori di cambio scenario
+      tskMusicPlayer.stop();                   // Stop music loop
       SoftTimer.remove(&tskProiettori_smooth); // Ferma effetto "smooth" su proiettori
       proiettori(12);                          // Proiettori 5%
       lampadine(255);                          // Lampadine 100%
-      tskScenario1.delayMs = 5000;             // Durata scenario 4 
+      tskScenario1.delayMs = 5000;             // Durata scenario 4 in millisecondi
       tskScenario1.startDelayed();
       break;
   }
@@ -187,25 +216,33 @@ void ISR_scenario2(){ scenario = 2; }
 void ISR_scenario3(){ scenario = 3; }
 void ISR_scenario4(){ scenario = 4; }
 
+void enableSensors(){
+  attachInterrupt( digitalPinToInterrupt(SENSORE_A1), ISR_scenario2, CHANGE );
+  attachInterrupt( digitalPinToInterrupt(SENSORE_A2), ISR_scenario2, CHANGE );
+  attachInterrupt( digitalPinToInterrupt(SENSORE_B),  ISR_scenario3, CHANGE );
+  attachInterrupt( digitalPinToInterrupt(SENSORE_C),  ISR_scenario4, CHANGE );
+}
+
+void disableSensors(){
+  detachInterrupt( digitalPinToInterrupt(SENSORE_A1));
+  detachInterrupt( digitalPinToInterrupt(SENSORE_A2));
+  detachInterrupt( digitalPinToInterrupt(SENSORE_B));
+  detachInterrupt( digitalPinToInterrupt(SENSORE_C));
+}
+
 void setup() {
 //  Serial.begin(115200);
 
-#define SENSORE_A1 18
-#define SENSORE_A2 19
-#define SENSORE_B  20
-#define SENSORE_C  21
+pinMode(PLAY_BUTTON_PIN, OUTPUT);
+
 pinMode(SENSORE_A1, INPUT_PULLUP);
 pinMode(SENSORE_A2, INPUT_PULLUP);
 pinMode(SENSORE_B,  INPUT_PULLUP);
 pinMode(SENSORE_C,  INPUT_PULLUP);
-attachInterrupt( digitalPinToInterrupt(SENSORE_A1), ISR_scenario2, CHANGE );
-attachInterrupt( digitalPinToInterrupt(SENSORE_A2), ISR_scenario2, CHANGE );
-attachInterrupt( digitalPinToInterrupt(SENSORE_B),  ISR_scenario3, CHANGE );
-attachInterrupt( digitalPinToInterrupt(SENSORE_C),  ISR_scenario4, CHANGE );
 
 #if defined (_USE_SOFT_PWM_)
-//  SoftTimer.add(&led2);
-//  SoftTimer.add(&led4);
+  SoftTimer.add(&led2);
+  SoftTimer.add(&led4);
   SoftTimer.add(&led6);
   SoftTimer.add(&led8);
   SoftTimer.add(&led10);
